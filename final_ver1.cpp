@@ -1,5 +1,3 @@
-//****hw04****//
-
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -38,11 +36,13 @@ struct parameter {
 };
 
 int sample = 4;
+int dct_point = 8;
 int data_width = 512;
 int data_height = 512;
 int data_size = 512 * 512;
 int header_size = 1078;
-int dct_point = 8;
+
+
 
 typedef struct node* nodeptr;
 
@@ -57,14 +57,9 @@ typedef struct node {
 // a priority queue implemented as a binary heap !
 typedef struct PQ {
 	int	heap_size;
-	nodeptr* A = new nodeptr[256 / sample];
+	//nodeptr* A = new nodeptr[256 / sample];
+	nodeptr* A;
 };
-
-typedef struct PQ2 {
-	int	heap_size;
-	nodeptr* A = new nodeptr[256 / sample * 2 - 1];
-};
-
 
 int parent(int i); // find heap node's parent 
 int leftchild(int i); // find heap node's left kid 
@@ -81,12 +76,6 @@ void traverse(nodeptr r, 	// root of this subtree
 	int length[]
 ); //array 
 
-
-void heap_make2(PQ2 *p, int i);
-void insert_pq2(PQ2 *p, nodeptr r);//insert node to pq
-nodeptr extract_min_pq2(PQ2 *p);//extract min node in pq
-
-nodeptr sort_for_nodes(node * nodearray, int size);
 
 int main(int argc, char *argv[])
 {
@@ -130,7 +119,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < para.h; i++) {
 		for (int j = 0; j < para.w; j++) {
 			read_f.read((char*)&int8buffer, sizeof(unsigned char));
-			image[(para.h - 1 - i)*para.w + j] = int8buffer;
+			image[(para.h - 1 - i)*para.w + j] = int8buffer / para.sample;
 		}
 	}
 
@@ -138,7 +127,7 @@ int main(int argc, char *argv[])
 	//cout << "***DCT***" << endl;
 	MatrixXf  A(para.point, para.point);
 
-	for (int i = 0; i<para.point; i++)
+	for (int i = 0; i < para.point; i++)
 		for (int j = 0; j < para.point; j++) {
 			if (i == 0)
 				A(i, j) = sqrt((float)2 / para.point)*sqrt((float)1 / 2)*cos(2 * EIGEN_PI*(2 * j + 1)*i / (4 * para.point));
@@ -146,29 +135,16 @@ int main(int argc, char *argv[])
 				A(i, j) = sqrt((float)2 / para.point) * 1 * cos(2 * EIGEN_PI*(2 * j + 1)*i / (4 * para.point));
 		}
 
-	//write_f << "Tdct" << endl;
-	//cout << "Tdct:" << endl;
-	//write file
-	//for (int i = 0; i< para.point; i++) {
-	//	for (int j = 0; j< para.point; j++) {
-			//write_f << A(i, j) << ",";
-	//		cout << A(i, j) << " ";
-	//	}
-		//write_f << endl;
-	//	cout << endl;
-	//}
-
-
 	////////////////////////////////////////////////////DCT image///////////////////////////////////////////////
 
 
 	MatrixXf  block(para.point, para.point);
 	MatrixXf  dct_block(para.point, para.point);
-	int *image_dct = new  int[para.data_size];
-	for (int i = 0; i<para.h - para.point + 1; i += para.point)
+	int *image_dct = new int[para.data_size];
+	for (int i = 0; i < para.h - para.point + 1; i += para.point)
 		for (int j = 0; j < para.w - para.point + 1; j += para.point) {
-			for (int y = 0; y<para.point; y++)
-				for (int x = 0; x<para.point; x++)
+			for (int y = 0; y < para.point; y++)
+				for (int x = 0; x < para.point; x++)
 					block(x, y) = image[(j + y) * para.w + (i + x)] - 128;//Because the DCT is designed to work on pixel values ranging from -128 to 127
 			dct_block = A*block*A.transpose();
 			for (int y = 0; y < para.point; y++)
@@ -180,7 +156,7 @@ int main(int argc, char *argv[])
 	///////////////////////////////////////////////output DCT image///////////////////////////////////////////////
 	const char* dct_file;
 	//if (para.filename == "bmp_file/baboon.bmp")
-		dct_file = "baboon_dct.bmp";
+	dct_file = "baboon_dct.bmp";
 	//else
 	//	dct_file = "lout.bmp";
 
@@ -201,30 +177,32 @@ int main(int argc, char *argv[])
 		}
 	}
 	///////////////////////////////////////////////quantization///////////////////////////////////////////////////
-	unsigned char* Q50_table_8x8 = new unsigned char[64];
+	//unsigned char* Q50_table_8x8 = new unsigned char[64];
+	unsigned char* Q50_table_8x8 = new unsigned char[para.point*para.point];
 	int *image_dct_Q50 = new int[para.data_size];
 	FILE *Q_in = NULL;
 	Q_in = fopen("Q_table_8x8.txt", "r");
-	
-	for (int i = 0; i < 64; i++) {
-		fscanf(Q_in, "%d", &Q50_table_8x8[i]);
+
+	for (int i = 0; i < para.point*para.point; i++) {
+		if (para.point == 8)
+			fscanf(Q_in, "%d", &Q50_table_8x8[i]);
+		else
+			Q50_table_8x8[i] = 1;
 		//cout << (unsigned)Q_table_8x8[i] << endl;
 		//system("pause");
 	}
-	fclose(Q_in);
-
 	////C=round(D_block/Q)
-	for (int i = 0; i<para.h - para.point + 1; i += para.point)
+	for (int i = 0; i < para.h - para.point + 1; i += para.point)
 		for (int j = 0; j < para.w - para.point + 1; j += para.point) {
-			for (int y = 0; y<para.point; y++)
-				for (int x = 0; x<para.point; x++)
-					image_dct_Q50[(j + y) * para.w + (i + x)] = round((float)image_dct[(j + y) * para.w + (i + x)]/Q50_table_8x8[y*para.point+x]);
+			for (int y = 0; y < para.point; y++)
+				for (int x = 0; x < para.point; x++)
+					image_dct_Q50[(j + y) * para.w + (i + x)] = round((float)image_dct[(j + y) * para.w + (i + x)] / Q50_table_8x8[y*para.point + x]);
 		}
 
 	///////////////////////////////////////////////output DCT Q50 image////////////////////////////////////////////
 	const char* dct_Q50_file;
 	//if (para.filename == "bmp_file/baboon.bmp")
-	dct_Q50_file = "baboon_dct_Q50.bmp";
+	dct_Q50_file = "baboon_dct_quantization.bmp";
 	//else
 	//	dct_file = "lout.bmp";
 
@@ -246,6 +224,11 @@ int main(int argc, char *argv[])
 	}
 
 	///////////////////////////////////////////////encoding///////////////////////////////////////////////////////
+	int max_d50 = 0;
+	for (int i = 0; i < para.data_size; i++)
+		if (abs(image_dct_Q50[i]) > max_d50)
+			max_d50 = abs(image_dct_Q50[i]);
+
 	clock_t start_en, finish_en, start_de, finish_de;
 	start_en = clock();
 	float duration_en, duration_de;
@@ -256,9 +239,11 @@ int main(int argc, char *argv[])
 
 	int *imageQ = new int[para.data_size];
 	int *imageQQ = new int[para.data_size];
-	unsigned char temp = 0;
-	unsigned int *counter = new unsigned int[256 / para.sample];       //0~256/sample
-	unsigned int *counter2 = new unsigned int[256 / para.sample * 2 - 1];//-(256 / sample - 1)~(256 / sample - 1)
+	//unsigned char temp = 0;
+	int counter_range = 2 * max_d50 + 1;//-max_d50~max_d50
+	int counter_range2 = 4 * max_d50 + 1;	 //-2*max_d50~2*max_d50
+	unsigned int *counter = new unsigned int[counter_range];
+	unsigned int *counter2 = new unsigned int[counter_range2];
 	nodeptr r; // root of Huffman tree  
 	nodeptr r2;
 
@@ -269,20 +254,20 @@ int main(int argc, char *argv[])
 		imageQQ[i] = 0;
 
 
-	for (int i = 0; i < 256 / para.sample; i++)
+	for (int i = 0; i < counter_range; i++)
 		counter[i] = 0;
 
 
 
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++) 
+	for (int i = 0; i < counter_range2; i++)
 		counter2[i] = 0;
 
 
 	for (int i = 0; i < para.data_size; i++)
-		//imageQ[i] = image[i] / para.sample;
-		//imageQ[i] = image_dct[i] / para.sample;
-		imageQ[i] = image_dct_Q50[i]/para.sample;
+		//imageQ[i] = image[i] ;
+		//imageQ[i] = image_dct[i] ;
+		imageQ[i] = image_dct_Q50[i];
 
 	for (int i = 0; i < para.data_size; i++) {
 
@@ -295,20 +280,20 @@ int main(int argc, char *argv[])
 		else
 			imageQQ[i] = imageQ[i] - imageQ[i - 1];
 
-		for (int j = 0; j < 256 / para.sample; j++)
-			if (imageQ[i] == j)
+		for (int j = 0; j < counter_range; j++)
+			if (imageQ[i] == -max_d50 + j)
 				counter[j]++;
 
 	}
 
 	for (int i = 0; i < para.data_size; i++)
-		for (int j = 0; j < 256 / para.sample * 2 - 1; j++)
-			if (imageQQ[i] == j - (256 / para.sample - 1))
+		for (int j = 0; j < counter_range2; j++)
+			if (imageQQ[i] == -2 * max_d50 + j)
 				counter2[j]++;
 
 
 
-	for (int i = 0; i < 256 / para.sample; i++) {
+	for (int i = 0; i < counter_range; i++) {
 
 		if (!counter[i])
 			entropy_Q += 0;
@@ -316,20 +301,17 @@ int main(int argc, char *argv[])
 			entropy_Q += (-1)*((float)counter[i] / para.data_size)*log2f((float)counter[i] / para.data_size);
 	}
 
-	char **bitcodes = new char*[256 / para.sample]; // array of codes, 1 bit per char 
-	char *bitcode = new char[100];   // a place to hold 1 code each time
-	int * length = new int[256 / para.sample];
-	r = build_huffman(counter, 256 / para.sample);
+	char **bitcodes = new char*[counter_range]; // array of codes, 1 bit per char 
+	char *bitcode = new char[1000];   // a place to hold 1 code each time
+	int * length = new int[counter_range];
+	r = build_huffman(counter, counter_range);
 
-	for (int i = 0; i < 256 / para.sample; i++)
+	for (int i = 0; i < counter_range; i++)
 		bitcodes[i] = 0;
 
 	traverse(r, 0, bitcode, bitcodes, length);
-	//delete[]r;
-	//delete[]bitcode;
-	//delete[]bitcodes;
 
-	for (int i = 0; i < 256 / para.sample; i++) {
+	for (int i = 0; i < counter_range; i++) {
 
 
 		if (counter[i] == para.data_size)
@@ -340,7 +322,7 @@ int main(int argc, char *argv[])
 
 
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++) {
+	for (int i = 0; i < counter_range2; i++) {
 
 		if (!counter2[i])
 			entropy_dQ += 0;
@@ -349,10 +331,10 @@ int main(int argc, char *argv[])
 
 	}
 
-	char **bitcodes2 = new char*[256 / para.sample * 2 - 1]; // array of codes, 1 bit per char 
-	char *bitcode2 = new char[100];   // a place to hold 1 code each time
-	int *length2 = new int[256 / para.sample * 2 - 1];
-	r2 = build_huffman(counter2, 256 / para.sample * 2 - 1);
+	char **bitcodes2 = new char*[counter_range2]; // array of codes, 1 bit per char 
+	char *bitcode2 = new char[1000];   // a place to hold 1 code each time
+	int *length2 = new int[counter_range2];
+	r2 = build_huffman(counter2, counter_range2);
 	int maxlength = 0;//offset_size
 	int codenum = 0;
 	//int offset_num = 0;
@@ -365,26 +347,56 @@ int main(int argc, char *argv[])
 	unsigned char bitstream = 0;
 	int out_count = 0;
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++)
+	for (int i = 0; i < counter_range2; i++)
 		bitcodes2[i] = 0;
 
 	traverse(r2, 0, bitcode2, bitcodes2, length2);
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++)                    //by the result of  traverse for bitcodes     
-		if (bitcodes2[i] != 0) {
 
-			symbol_size++;
-		}
+	for (int i = 0; i < counter_range2; i++) {
+
+		if (counter2[i] == para.data_size)
+			bitrate_dQ += 0;
+		else
+			bitrate_dQ += ((float)counter2[i] / para.data_size)*length2[i];
+	}
 
 
+	//cout << bitrate_Q << endl;
+	//cout << bitrate_dQ << endl;
+	//system("pause");
+
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < counter_range; i++)                    //by the result of  traverse for bitcodes     
+			if (bitcodes[i] != 0)
+				symbol_size++;
+	}		
+	
+	else {
+		for (int i = 0; i < counter_range2; i++)                    //by the result of  traverse for bitcodes     
+			if (bitcodes2[i] != 0)
+				symbol_size++;
+	}
+
+			
 	symbol_order = new int[symbol_size];
 	for (int i = 0; i < symbol_size; i++)
 		symbol_order[i] = 0;
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++)
-		if (length2[i] > maxlength)
-			maxlength = length2[i];
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < counter_range; i++)
+			if (length[i] > maxlength)
+				maxlength = length[i];
+	}
 
+	else {
+		for (int i = 0; i < counter_range2; i++)
+			if (length2[i] > maxlength)
+				maxlength = length2[i];
+	}
+
+
+	//cout << maxlength<< endl;
 	offset_codenum = new int[maxlength];
 	offset_range = new int[maxlength];
 
@@ -399,15 +411,30 @@ int main(int argc, char *argv[])
 
 	for (int i = 0; i < maxlength; i++)
 		lengthcount2[i] = 0;
+	
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < maxlength; i++)
+			for (int j = 0; j < counter_range; j++)
+				if (length[j] == i + 1) {
+					lengthcount2[i]++;
+					symbol_order[codenum] = -max_d50 + j;
+					codenum++;
 
-	for (int i = 0; i < maxlength; i++)
-		for (int j = 0; j < 256 / sample * 2 - 1; j++)
-			if (length2[j] == i + 1) {
-				lengthcount2[i]++;
-				symbol_order[codenum] = j - (256 / sample - 1);
-				codenum++;
+				}
 
-			}
+	}
+	else {
+		for (int i = 0; i < maxlength; i++)
+			for (int j = 0; j < counter_range2; j++)
+				if (length2[j] == i + 1) {
+					lengthcount2[i]++;
+					symbol_order[codenum] = -2 * max_d50 + j;
+					codenum++;
+
+				}
+
+	}
+
 
 	for (int i = 0; i < maxlength; i++)
 		if (i == 0) {
@@ -422,21 +449,24 @@ int main(int argc, char *argv[])
 		}
 
 
-	for (int i = 0; i < 256 / para.sample * 2 - 1; i++) {
-
-		if (counter2[i] == para.data_size)
-			bitrate_dQ += 0;
-		else
-			bitrate_dQ += ((float)counter2[i] / para.data_size)*length2[i];
-	}
 
 	const char* bin_file ="baboon_dct_encode.bin";
 	ofstream fenco(bin_file, ios::out | ios::binary);
 
-	for (int i = 0; i < para.data_size; i++)
-		for (int j = 0; j < symbol_size; j++)
-			if (imageQQ[i] == symbol_order[j])
-				codenum_now[i] = j;
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < para.data_size; i++)
+			for (int j = 0; j < symbol_size; j++)
+				if (imageQ[i] == symbol_order[j])
+					codenum_now[i] = j;
+	}
+	else {
+		for (int i = 0; i < para.data_size; i++)
+			for (int j = 0; j < symbol_size; j++)
+				if (imageQQ[i] == symbol_order[j])
+					codenum_now[i] = j;
+	}
+
+
 
 	for (int i = 0; i < para.data_size; i++)
 		for (int j = 0; j < maxlength; j++)
@@ -446,26 +476,54 @@ int main(int argc, char *argv[])
 
 
 	int data_count = 0;
-	for (int i = 0; i < para.data_size; i++) {
 
-		int *encode_bit = new int[length2[imageQQ[i] + 256 / para.sample - 1]];
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < para.data_size; i++) {
 
-		for (int j = 0; j < length2[imageQQ[i] + 256 / para.sample - 1]; j++) {
-			encode_bit[length2[imageQQ[i] + 256 / para.sample - 1] - j - 1] = encode[i] % 2;
-			encode[i] /= 2;
-		}
-		for (int j = 0; j < length2[imageQQ[i] + 256 / para.sample - 1]; j++) {
-			bitstream *= 2;
-			out_count++;
-			bitstream += encode_bit[j];
-			if (out_count == 8) {
-				fenco.write((char*)&bitstream, sizeof(bitstream));
-				bitstream = 0;
-				out_count = 0;
+			int *encode_bit = new int[length[imageQ[i] + max_d50]];
+
+			for (int j = 0; j < length[imageQ[i] + max_d50]; j++) {
+				encode_bit[length[imageQ[i] + max_d50] - j - 1] = encode[i] % 2;
+				encode[i] /= 2;
 			}
+			for (int j = 0; j < length[imageQ[i] + max_d50]; j++) {
+				bitstream *= 2;
+				out_count++;
+				bitstream += encode_bit[j];
+				if (out_count == 8) {
+					fenco.write((char*)&bitstream, sizeof(bitstream));
+					bitstream = 0;
+					out_count = 0;
+				}
 
+			}
+			delete[]encode_bit;
 		}
-		delete[]encode_bit;
+
+	}
+	else {
+		for (int i = 0; i < para.data_size; i++) {
+
+			int *encode_bit = new int[length2[imageQQ[i] + 2*max_d50]];
+
+			for (int j = 0; j < length2[imageQQ[i] + 2 * max_d50]; j++) {
+				encode_bit[length2[imageQQ[i] + 2 * max_d50] - j - 1] = encode[i] % 2;
+				encode[i] /= 2;
+			}
+			for (int j = 0; j < length2[imageQQ[i] + 2 * max_d50]; j++) {
+				bitstream *= 2;
+				out_count++;
+				bitstream += encode_bit[j];
+				if (out_count == 8) {
+					fenco.write((char*)&bitstream, sizeof(bitstream));
+					bitstream = 0;
+					out_count = 0;
+				}
+
+			}
+			delete[]encode_bit;
+		}
+
 	}
 
 
@@ -479,7 +537,7 @@ int main(int argc, char *argv[])
 	out_count = 0;
 	int bit_count = 0;
 	ifstream fdeco(bin_file, ios::in | ios::binary);
-	_int64 temp_decode = 0;
+	long long temp_decode = 0;
 	char decode_bit;
 	unsigned char tmp;
 	int *decode = new int[para.data_size];
@@ -526,23 +584,31 @@ int main(int argc, char *argv[])
 
 	}
 
+	if (bitrate_Q < bitrate_dQ) {
+		for (int i = 0; i < para.data_size; i++)
+			decodeQ[i] = symbol_order[decode[i]];
+	}
+	else {
+		for (int i = 0; i < para.data_size; i++)
+			decodeQQ[i] = symbol_order[decode[i]];
 
-	for (int i = 0; i < para.data_size; i++)
-		decodeQQ[i] = symbol_order[decode[i]];
+		if (para.sample == 4)
+			decodeQ[0] = decodeQQ[0] + 32;
+		else if (para.sample == 2)
+			decodeQ[0] = decodeQQ[0] + 64;
+		else
+			decodeQ[0] = decodeQQ[0] + 128;
 
-	if (para.sample == 4)
-		decodeQ[0] = decodeQQ[0] + 32;
-	else if (para.sample == 2)
-		decodeQ[0] = decodeQQ[0] + 64;
-	else
-		decodeQ[0] = decodeQQ[0] + 128;
+		for (int i = 1; i < para.data_size; i++)
+			decodeQ[i] = (decodeQQ[i] + decodeQ[i - 1]);
+	}
 
-	for (int i = 1; i < para.data_size; i++)
-		decodeQ[i] = (decodeQQ[i] + decodeQ[i - 1]);
+
+
 
 
 	const char* out_file;
-	out_file = "baboon_dct_Q50_decode.bmp";
+	out_file = "baboon_dct_quantization_decode.bmp";
 
 	ofstream fbmp3(out_file, ios::out | ios::binary);
 
@@ -556,14 +622,14 @@ int main(int argc, char *argv[])
 
 	for (int i = 0; i < para.h; i++) {
 		for (int j = 0; j < para.w; j++) {
-			int8buffer = decodeQ[(para.h - 1 - i)*para.w + j] * para.sample;
+			int8buffer = decodeQ[(para.h - 1 - i)*para.w + j];// *para.sample;
 			//int8buffer = decodeQ[i*data_width + j] * sample;
 			fbmp3.write((char*)&int8buffer, sizeof(unsigned char));
 		}
 	}
 
 	finish_de = clock();
-
+	
 
 	///////////////////////////////////////////// output information /////////////////////////////////////////////
 	const char* info_file = "info_baboon_dct.txt";
@@ -586,7 +652,7 @@ int main(int argc, char *argv[])
 		for (int j = 0; j < para.w - para.point + 1; j += para.point) {
 			for (int y = 0; y<para.point; y++)
 				for (int x = 0; x<para.point; x++)
-					image_dct_decode[(j + y) * para.w + (i + x)] = Q50_table_8x8[y*para.point + x] *decodeQ[(j + y) * para.w + (i + x)] * para.sample;
+					image_dct_decode[(j + y) * para.w + (i + x)] = Q50_table_8x8[y*para.point + x] *decodeQ[(j + y) * para.w + (i + x)];
 		}
 
 	//////////////////////////////////////output de-quantization image////////////////////////////////////////////
@@ -648,11 +714,12 @@ int main(int argc, char *argv[])
 
 	for (int i = 0; i < para.h; i++) {
 		for (int j = 0; j < para.w; j++) {
-			int8buffer = image_decode[(para.h - 1 - i)*para.w + j];
+			int8buffer = image_decode[(para.h - 1 - i)*para.w + j]*para.sample;
 			//int8buffer = image_dct[i*para.w + j];
 			fbmp5.write((char*)&int8buffer, sizeof(unsigned char));
 		}
 	}
+
 	//////////////////////////////////////////////free space//////////////////////////////////////////////////////
 	delete[]image;
 	delete[]image_dct;
@@ -823,125 +890,44 @@ nodeptr extract_min_pq(PQ *p)
 	return r;
 }
 
-void heap_make2(PQ2 *p, int i)
-{
-	int		leftc, rightc, smallest;
-	nodeptr t;
-	leftc = leftchild(i);
-	rightc = rightchild(i);
-
-	//?H?U?A find the smallest of parent, left, and right 
-	if (leftc  < p->heap_size && p->A[leftc]->count < p->A[i]->count)
-		smallest = leftc;
-	else
-		smallest = i;
-
-	if (rightc < p->heap_size && p->A[rightc]->count < p->A[smallest]->count)
-		smallest = rightc;
-
-	if (smallest != i) //?ｸ・?A?p?G?e?z?澱c????? 
-	{
-		t = p->A[i];
-		p->A[i] = p->A[smallest];
-		p->A[smallest] = t;
-		heap_make2(p, smallest);
-	}
-}
-
-void insert_pq2(PQ2 *p, nodeptr r)
-{
-	int		i;
-
-	p->heap_size++;
-	i = p->heap_size - 1;
-
-	while ((i > 0) && (p->A[parent(i)]->count > r->count))
-	{
-		p->A[i] = p->A[parent(i)];
-		i = parent(i);
-	}
-	p->A[i] = r;
-}
-
-nodeptr extract_min_pq2(PQ2 *p)
-{
-	nodeptr r;
-
-	r = p->A[0];
-	p->A[0] = p->A[p->heap_size - 1];// take the last and put it in the root 
-	p->heap_size--;// one less thing in queue 
-	heap_make2(p, 0);// left and right are a heap, make the root a heap 
-	return r;
-}
-
 nodeptr build_huffman(unsigned int freqs[], int size)
 {
 	int		i, n;
 	nodeptr	x, y, z;
 	PQ		p;
-	PQ2     p2;
-
+	p.A= new nodeptr[size];
 	p.heap_size = 0;
-	p2.heap_size = 0;
 	// ?H?U?Afor each character, make a heap/tree node with its value and frequency 
 
 	for (i = 0; i < size; i++)
 	{
 		if (freqs[i] != 0)
-		{                  //this condition is important!?A?_?h???????v??????G?A?|?h?@??node 
+		{   //this condition is important!?A?_?h???????v??????G?A?|?h?@??node 
 			x = (nodeptr)malloc(sizeof(node));//this is a leaf of the Huffman tree 
 			x->left = NULL;
 			x->right = NULL;
 			x->count = freqs[i];
-			if (size == 256 / sample) {
-				x->symbol = i;
-				insert_pq(&p, x);
-			}
-
-			else {
-				x->symbol = i;// -(256 / sample - 1);
-				insert_pq2(&p2, x);
-			}
+			x->symbol = i;
+			insert_pq(&p, x);
 
 
 		}
 	}
-	if (size == 256 / sample) {
-		while (p.heap_size > 1) {
-			//?H?U make a new node z from the two least frequent
-			z = (nodeptr)malloc(sizeof(node));
-			x = extract_min_pq(&p);
-			y = extract_min_pq(&p);
+	while (p.heap_size > 1) {
+		//?H?U make a new node z from the two least frequent
+		z = (nodeptr)malloc(sizeof(node));
+		x = extract_min_pq(&p);
+		y = extract_min_pq(&p);
 
-
-			z->left = x;
-			z->right = y;
-			z->symbol = z->right->symbol;
-			z->count = x->count + y->count;
-			insert_pq(&p, z);
-		}
-
-		/* return the only thing left in the queue, the whole Huffman tree */
-		return extract_min_pq(&p);
-	}
-	else {
-		while (p2.heap_size > 1) {
-			//?H?U make a new node z from the two least frequent
-			z = (nodeptr)malloc(sizeof(node));
-			x = extract_min_pq2(&p2);
-			y = extract_min_pq2(&p2);
-
-			z->left = x;
-			z->right = y;
-			z->symbol = z->right->symbol;
-			z->count = x->count + y->count;
-			insert_pq2(&p2, z);
-		}
-
-		/* return the only thing left in the queue, the whole Huffman tree */
-		return extract_min_pq2(&p2);
+		z->left = x;
+		z->right = y;
+		z->symbol = z->right->symbol;
+		z->count = x->count + y->count;
+		insert_pq(&p, z);
 	}
 
+	/* return the only thing left in the queue, the whole Huffman tree */
+	return extract_min_pq(&p);
 
 }
 
